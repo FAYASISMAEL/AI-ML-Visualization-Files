@@ -1,40 +1,61 @@
-import numpy as np
 import pandas as pd
-import string
+import numpy as np
 import re
+import string
 
-# Read text file
-with open(r"D:\MyWorks\python\businessCard.txt", mode='r', encoding='utf-8', errors='ignore') as file:
-    text = file.read()
+from collections import defaultdict
+from pprint import pprint
 
-# Convert text to DataFrame
-data = [line.split('\t') for line in text.split('\n') if line.strip()]
-df = pd.DataFrame(data[1:], columns=data[0])
+FILE_PATH = "D:\\MyWorks\\python\\businessCard.txt"
 
-# Cleaning setup
-whitespace = string.whitespace
-punctuation = '!#$%&\'()*+:;<=>?[\\]^`{|}~'
+# labels 
+IGNORE_LABELS = {"tag"}
 
-tableWhitespace = str.maketrans('', '', whitespace)
-tablePunctuation = str.maketrans('', '', punctuation)
+rows = []
+with open(FILE_PATH, "r", encoding="utf-8", errors="ignore") as f:
+    for line in f:
+        parts = line.strip().split()
+        if len(parts) < 3:
+            continue
+        img, token, label = parts[0], parts[1], parts[-1]
+        rows.append((img, token, label))
 
-# Clean text function (FIXED)
-def clean_text(text):
-    if not isinstance(text, str):
-        return ""
+# tokens
+grouped = defaultdict(list)
+for img, token, label in rows:
+    grouped[img].append((token, label))
 
-    text = text.lower()
-    text = text.translate(tableWhitespace)
-    text = text.translate(tablePunctuation)
-    return text
+# training data
+TRAINING_DATA = []
 
-# Apply cleaning
-df['text'] = df['text'].apply(clean_text)
+for img, tokens in grouped.items():
+    text = ""
+    entities = []
 
-dataClean = df[df['text'] != ""]
-dataClean.dropna(inplace=True)
-# index adjustment
-# dataClean.index = dataClean.index - 2
+    cursor = 0
+    for token, label in tokens:
+        if token == "O":
+            continue
 
-# Output
-print(dataClean.head(10))
+        if text and not text.endswith(" "):
+            text += " "
+            cursor += 1
+
+        start = cursor
+        text += token
+        end = cursor + len(token)
+
+        if label != "O":
+            norm_label = re.sub(r'^[BI]-', '', label, flags=re.I).lower()
+            if norm_label in IGNORE_LABELS:
+                continue
+            entities.append((start, end, label))
+
+        cursor = end
+
+    if entities:
+        TRAINING_DATA.append(
+            (text, {"entities": entities})
+        )
+
+pprint(TRAINING_DATA[:2])
